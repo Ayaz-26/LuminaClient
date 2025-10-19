@@ -6,7 +6,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.lombok)
     kotlin("plugin.serialization") version libs.versions.kotlin
-    id("com.google.firebase.crashlytics")
     id("com.google.gms.google-services")
 }
 
@@ -142,8 +141,6 @@ dependencies {
     implementation(project(":Lunaris"))
     implementation(project(":SSC"))
     implementation(project(":TablerIcons"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-crashlytics")
     implementation(platform("com.google.firebase:firebase-bom:33.13.0"))
     implementation(libs.kotlinx.serialization.json.jvm)
     implementation(libs.androidx.core.ktx)
