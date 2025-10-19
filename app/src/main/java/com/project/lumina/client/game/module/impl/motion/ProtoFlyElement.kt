@@ -6,6 +6,8 @@ import com.project.lumina.client.constructors.Element
 import com.project.lumina.client.constructors.CheatCategory
 import com.project.lumina.client.util.AssetManager
 import org.cloudburstmc.math.vector.Vector3f
+import org.cloudburstmc.protocol.bedrock.data.command.CommandPermission
+import org.cloudburstmc.protocol.bedrock.data.Effect
 import org.cloudburstmc.protocol.bedrock.data.*
 import org.cloudburstmc.protocol.bedrock.packet.*
 import kotlin.math.PI
@@ -22,7 +24,7 @@ class ProtoFlyElement(
 ) {
 
     /* ---------- settings – exact Protohax names / ranges ---------- */
-    private var mode by choiceValue("Mode", arrayOf("Vanilla", "Mineplex", "Jetpack", "Glide", "YPort"), "Vanilla")
+    private var mode by listValue("Mode", arrayOf("Vanilla", "Mineplex", "Jetpack", "Glide", "YPort"), "Vanilla")
     private var speed by floatValue("Speed", 1.5f, 0.1f..5f)
     private var pressJump by booleanValue("PressJump", true)
     private var mineplexMotion by booleanValue("MineplexMotion", false)   // only for Mineplex mode
