@@ -45,6 +45,7 @@ import com.project.lumina.client.game.module.impl.motion.HighJumpElement
 import com.project.lumina.client.game.module.impl.motion.JetPackElement
 import com.project.lumina.client.game.module.impl.motion.JitterFlyElement
 import com.project.lumina.client.game.module.impl.motion.LongJumpElement
+import com.project.lumina.client.game.module.impl.motion.ProtoFlyElement
 import com.project.lumina.client.game.module.impl.motion.MotionFlyElement
 import com.project.lumina.client.game.module.impl.combat.OpFightBotElement
 import com.project.lumina.client.game.module.api.commands.CmdListener
