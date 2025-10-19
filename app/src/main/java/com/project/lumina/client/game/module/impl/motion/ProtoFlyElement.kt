@@ -6,13 +6,9 @@ import com.project.lumina.client.constructors.Element
 import com.project.lumina.client.constructors.CheatCategory
 import com.project.lumina.client.util.AssetManager
 import org.cloudburstmc.math.vector.Vector3f
-import org.cloudburstmc.protocol.bedrock.data.command.CommandPermission
-import org.cloudburstmc.protocol.bedrock.data.Effect
 import org.cloudburstmc.protocol.bedrock.data.*
+import org.cloudburstmc.protocol.bedrock.data.command.CommandPermission
 import org.cloudburstmc.protocol.bedrock.packet.*
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 class ProtoFlyElement(
     iconResId: Int = AssetManager.getAsset("ic_feather_black_24dp")
@@ -23,21 +19,21 @@ class ProtoFlyElement(
     displayNameResId = R.string.module_fly_display_name
 ) {
 
-    /* ---------- settings – exact Protohax names / ranges ---------- */
-    private var mode by listValue("Mode", arrayOf("Vanilla", "Mineplex", "Jetpack", "Glide", "YPort"), "Vanilla")
-    private var speed by floatValue("Speed", 1.5f, 0.1f..5f)
-    private var pressJump by booleanValue("PressJump", true)
-    private var mineplexMotion by booleanValue("MineplexMotion", false)   // only for Mineplex mode
+    /* ---------- settings ---------- */
+    private var mode        by listValue("Mode", arrayOf("Vanilla", "Mineplex", "Jetpack", "Glide", "YPort"), "Vanilla")
+    private var speed       by floatValue("Speed", 1.5f, 0.1f..5f)
+    private var pressJump   by boolValue("PressJump", true)
+    private var mineplexMotion by boolValue("MineplexMotion", false)
 
     /* ---------- runtime ---------- */
-    private var launchY = 0f
+    private var launchY   = 0f
     private var yPortFlag = true
     private var glideActive = false
 
     private val canFly: Boolean
-        get() = !pressJump || session.localPlayer.inputData.contains(PlayerAuthInputData.JUMP_DOWN)
+        get() = !pressJump || session.localPlayer?.inputData?.contains(PlayerAuthInputData.JUMP_DOWN) == true
 
-    /* ---------- shared ability packet (may-fly + fly-speed) ---------- */
+    /* ---------- ability ---------- */
     private val abilityPacket = UpdateAbilitiesPacket().apply {
         playerPermission = PlayerPermission.OPERATOR
         commandPermission = CommandPermission.OWNER
@@ -57,27 +53,27 @@ class ProtoFlyElement(
         })
     }
 
-    /* ---------- life-cycle ---------- */
     override fun onEnabled() {
-        launchY = session.localPlayer.posY
+        launchY = session.localPlayer?.posY ?: 0f
         yPortFlag = true
         glideActive = false
     }
 
     override fun onDisabled() {
         if (glideActive) {
-            session.clientBound(
-                MobEffectPacket().apply {
-                    event = MobEffectPacket.Event.REMOVE
-                    runtimeEntityId = session.localPlayer.runtimeEntityId
-                    effectId = Effect.SLOW_FALLING
-                }
-            )
+            session.localPlayer?.let {
+                session.clientBound(
+                    MobEffectPacket().apply {
+                        event = MobEffectPacket.Event.REMOVE
+                        runtimeEntityId = it.runtimeEntityId
+                        effectId = Effect.SLOW_FALLING
+                    }
+                )
+            }
             glideActive = false
         }
     }
 
-    /* ---------- main intercept ---------- */
     override fun beforePacketBound(interceptablePacket: InterceptablePacket) {
         val pkt = interceptablePacket.packet
 
@@ -90,108 +86,114 @@ class ProtoFlyElement(
             interceptablePacket.intercept()
             return
         }
-
-        /* 2.  send ability packet on StartGame */
         if (pkt is StartGamePacket) {
-            abilityPacket.uniqueEntityId = session.localPlayer.uniqueEntityId
+            abilityPacket.uniqueEntityId = session.localPlayer?.uniqueEntityId ?: return
             session.clientBound(abilityPacket)
         }
 
-        /* 3.  handle per-mode logic */
+        /* 2.  per-mode logic */
         when (mode) {
-            "Vanilla"   -> handleVanilla(pkt, interceptablePacket)
+            "Vanilla"   -> handleVanilla(pkt)
             "Mineplex"  -> handleMineplex(pkt, interceptablePacket)
-            "Jetpack"   -> handleJetpack(pkt, interceptablePacket)
-            "Glide"     -> handleGlide(pkt, interceptablePacket)
-            "YPort"     -> handleYPort(pkt, interceptablePacket)
+            "Jetpack"   -> handleJetpack(pkt)
+            "Glide"     -> handleGlide(pkt)
+            "YPort"     -> handleYPort(pkt)
         }
     }
 
     /* ---------------------------------------------------------- */
     /* -------------------- mode handlers ----------------------- */
     /* ---------------------------------------------------------- */
-    private fun handleVanilla(pkt: BedrockPacket, ip: InterceptablePacket) {
+    private fun handleVanilla(pkt: BedrockPacket) {
         if (pkt is PlayerAuthInputPacket && isEnabled && canFly) {
-            abilityPacket.uniqueEntityId = session.localPlayer.uniqueEntityId
+            abilityPacket.uniqueEntityId = session.localPlayer?.uniqueEntityId ?: return
             session.clientBound(abilityPacket)
         }
     }
 
     private fun handleMineplex(pkt: BedrockPacket, ip: InterceptablePacket) {
-        if (pkt is PlayerAuthInputPacket) {
-            if (!canFly) {
-                launchY = session.localPlayer.posY
-                return
-            }
-            val p = session.localPlayer
-            val yaw = Math.toRadians(p.rotationYaw.toDouble()).toFloat()
-            val dist = speed
-
-            if (mineplexMotion) {
-                val motion = SetEntityMotionPacket().apply {
-                    runtimeEntityId = p.runtimeEntityId
-                    motion = Vector3f.from(-sin(yaw) * dist, 0f, cos(yaw) * dist)
-                }
-                session.clientBound(motion)
-            } else {
-                p.teleport(p.posX - sin(yaw) * dist, launchY, p.posZ + cos(yaw) * dist)
-            }
-
-            /* lock Y on outbound auth packet */
-            ip.intercept()
-            pkt.position = Vector3f.from(pkt.position.x, launchY, pkt.position.z)
-            session.clientBound(pkt)
+        if (pkt !is PlayerAuthInputPacket) return
+        if (!canFly) {
+            launchY = session.localPlayer?.posY ?: return
+            return
         }
-    }
+        val p = session.localPlayer ?: return
+        val yaw = Math.toRadians(p.rotationYaw.toDouble()).toFloat()
+        val dist = speed
 
-    private fun handleJetpack(pkt: BedrockPacket, ip: InterceptablePacket) {
-        if (pkt is PlayerAuthInputPacket && canFly) {
-            val p = session.localPlayer
-            val yawRad = Math.toRadians(p.rotationYaw.toDouble())
-            val pitchRad = Math.toRadians(p.rotationPitch.toDouble()) * -1
-
+        if (mineplexMotion) {
             val motion = SetEntityMotionPacket().apply {
                 runtimeEntityId = p.runtimeEntityId
-                motion = Vector3f.from(
-                    cos(yawRad) * cos(pitchRad) * speed,
-                    sin(pitchRad) * speed,
-                    sin(yawRad) * cos(pitchRad) * speed
-                )
+                motion = Vector3f.from(-sin(yaw) * dist, 0f, cos(yaw) * dist)
             }
             session.clientBound(motion)
+        } else {
+            /* teleport replaced with MovePlayerPacket */
+            session.clientBound(
+                MovePlayerPacket().apply {
+                    runtimeEntityId = p.runtimeEntityId
+                    position = Vector3f.from(p.posX - sin(yaw) * dist, launchY, p.posZ + cos(yaw) * dist)
+                    rotation = Vector3f.from(p.rotationPitch, p.rotationYaw, 0f)
+                    mode = MovePlayerPacket.Mode.TELEPORT
+                }
+            )
         }
+
+        /* lock Y on outbound auth packet */
+        ip.intercept()
+        pkt.position = Vector3f.from(pkt.position.x, launchY, pkt.position.z)
+        session.clientBound(pkt)
     }
 
-    private fun handleGlide(pkt: BedrockPacket, ip: InterceptablePacket) {
-        if (pkt is PlayerAuthInputPacket && session.localPlayer.tickExists % 20 == 0L) {
+    private fun handleJetpack(pkt: BedrockPacket) {
+        if (pkt !is PlayerAuthInputPacket || !canFly) return
+        val p = session.localPlayer ?: return
+        val yawRad = Math.toRadians(p.rotationYaw.toDouble())
+        val pitchRad = Math.toRadians(p.rotationPitch.toDouble()) * -1
+
+        val motion = SetEntityMotionPacket().apply {
+            runtimeEntityId = p.runtimeEntityId
+            motion = Vector3f.from(
+                cos(yawRad) * cos(pitchRad) * speed,
+                sin(pitchRad) * speed,
+                sin(yawRad) * cos(pitchRad) * speed
+            )
+        }
+        session.clientBound(motion)
+    }
+
+    private fun handleGlide(pkt: BedrockPacket) {
+        if (pkt !is PlayerAuthInputPacket) return
+        if (session.localPlayer?.tickExists?.rem(20) != 0L) return
+        session.localPlayer?.let {
             session.clientBound(
                 MobEffectPacket().apply {
                     event = MobEffectPacket.Event.ADD
-                    runtimeEntityId = session.localPlayer.runtimeEntityId
+                    runtimeEntityId = it.runtimeEntityId
                     effectId = Effect.SLOW_FALLING
                     amplifier = 0
                     duration = 360000
                     isParticles = false
                 }
             )
-            glideActive = true
         }
+        glideActive = true
     }
 
-    private fun handleYPort(pkt: BedrockPacket, ip: InterceptablePacket) {
-        if (pkt is PlayerAuthInputPacket && canFly) {
-            val p = session.localPlayer
-            val yaw = Math.toRadians(p.rotationYaw.toDouble()).toFloat()
-            val motion = SetEntityMotionPacket().apply {
-                runtimeEntityId = p.runtimeEntityId
-                motion = Vector3f.from(
-                    -sin(yaw) * speed,
-                    if (yPortFlag) 0.42f else -0.42f,
-                    cos(yaw) * speed
-                )
-            }
-            session.clientBound(motion)
-            yPortFlag = !yPortFlag
+    private fun handleYPort(pkt: BedrockPacket) {
+        if (pkt !is PlayerAuthInputPacket || !canFly) return
+        val p = session.localPlayer ?: return
+        val yaw = Math.toRadians(p.rotationYaw.toDouble()).toFloat()
+
+        val motion = SetEntityMotionPacket().apply {
+            runtimeEntityId = p.runtimeEntityId
+            motion = Vector3f.from(
+                -sin(yaw) * speed,
+                if (yPortFlag) 0.42f else -0.42f,
+                cos(yaw) * speed
+            )
         }
+        session.clientBound(motion)
+        yPortFlag = !yPortFlag
     }
 }
