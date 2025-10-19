@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.lombok)
     kotlin("plugin.serialization") version libs.versions.kotlin
     id("com.google.firebase.crashlytics")
+    id("com.google.gms.google-services")
 }
 
 android {
